@@ -55,7 +55,7 @@ soco_config.REQUEST_TIMEOUT = 4.0
 RESYNC_INTERVAL_SECONDS = 2 * 3600
 
 
-def _track_metadata(title):
+def _track_metadata(title, is_l16=False):
     """DIDL-Lite metadata for our stream, built explicitly instead of
     relying on SoCo's play_uri(title=...) shortcut.
 
@@ -69,13 +69,14 @@ def _track_metadata(title):
     third-party service id instead should make Sonos treat it like
     normal audio, and let EQ controls work just like they do for other
     sources."""
+    upnp_class = "object.item.audioItem.audioBroadcast" if is_l16 else "object.item.audioItem.musicTrack"
     return (
         '<DIDL-Lite xmlns:dc="http://purl.org/dc/elements/1.1/" '
         'xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" '
         'xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/">'
         '<item id="1" parentID="0" restricted="1">'
         f"<dc:title>{escape(title)}</dc:title>"
-        "<upnp:class>object.item.audioItem.musicTrack</upnp:class>"
+        f"<upnp:class>{upnp_class}</upnp:class>"
         "</item></DIDL-Lite>"
     )
 
@@ -498,20 +499,32 @@ class SpeakerManager:
         except Exception as e:
             print(f"[sonos] volume set failed for {uid}: {e}")
 
-    def start_stream(self, uid, zone, base_url):
+    def start_stream(self, uid, zone, base_url, stream_format=None):
         self._boot_started.add(uid)
         self._last_auto_restart[uid] = time.monotonic()
+        if stream_format is None:
+            stream_format = config.get("stream_format", "l16")
+        ext = "l16" if stream_format == "l16" else "wav"
+        url = f"{base_url}/stream/{uid}.{ext}"
+        player_name = getattr(zone, "player_name", uid)
         try:
-            url = f"{base_url}/stream/{uid}.wav"
-            _effective_zone(zone).play_uri(url, meta=_track_metadata("PC Audio"))
+            _effective_zone(zone).play_uri(url, meta=_track_metadata("PC Audio", is_l16=(ext == "l16")))
             self.streams[uid] = True
-            print(f"[sonos] streaming to {zone.player_name}")
+            print(f"[sonos] streaming ({ext.upper()}) to {player_name}")
         except Exception as e:
-            print(f"[sonos] failed to start stream on {zone.player_name}: {e}")
+            print(f"[sonos] failed to start {ext.upper()} stream on {player_name}: {e}")
+            if ext == "l16":
+                try:
+                    url_wav = f"{base_url}/stream/{uid}.wav"
+                    _effective_zone(zone).play_uri(url_wav, meta=_track_metadata("PC Audio", is_l16=False))
+                    self.streams[uid] = True
+                    print(f"[sonos] fallback: streaming (WAV) to {player_name}")
+                except Exception as e2:
+                    print(f"[sonos] fallback WAV stream also failed on {player_name}: {e2}")
 
     def reconnect_all_streaming(self, base_url):
         """Force every currently-streaming speaker to reconnect and pull a
-        fresh WAV header. Needed whenever the actual PCM format changes
+        fresh stream header. Needed whenever the actual PCM format changes
         (sample rate/channels) -- e.g. the dashboard switching the capture
         source between whole-system and a single app, which run at
         different rates -- since an already-open Sonos connection has no
@@ -582,14 +595,9 @@ class SpeakerManager:
             if not config["speakers"].get(uid, {}).get("enabled", True):
                 continue
             try:
-                # query the COORDINATOR's transport, not this zone's own --
-                # a grouped, non-coordinator member mirrors the group's
-                # playback but reports its own CurrentURI as a pointer back
-                # to the coordinator (x-rincon:...), not our stream URL, so
-                # checking against this zone directly would never see "ours"
                 target = _effective_zone(zone)
                 uri = target.avTransport.GetMediaInfo([("InstanceID", 0)]).get("CurrentURI") or ""
-                ours = f"/stream/{uid}.wav" in uri
+                ours = (f"/stream/{uid}.wav" in uri) or (f"/stream/{uid}.l16" in uri)
                 state = target.get_current_transport_info().get("current_transport_state", "")
             except Exception as e:
                 # speaker unreachable / query failed; try again next tick

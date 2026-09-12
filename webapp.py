@@ -8,7 +8,7 @@ import time
 
 from flask import Flask, Response, jsonify, render_template_string, request
 
-from audio_engine import CHUNK, broadcaster, list_output_devices, restart_render, restart_capture, get_current_render_device_name, get_lan_ip
+from audio_engine import CHUNK, broadcaster, list_output_devices, restart_render, restart_capture, get_current_render_device_name, get_lan_ip, l16_chunk
 from config import config, save_config, PASSWORD_PATH
 from sonos_ctl import speaker_mgr
 
@@ -1006,6 +1006,17 @@ def api_diagnostics():
         return jsonify({"ok": False, "error": f"{type(e).__name__}: {e}"}), 500
 
 
+@app.route("/api/benchmark", methods=["GET", "POST"])
+def api_benchmark():
+    """Runs or returns high-resolution latency benchmark measurements across the capture & stream pipeline."""
+    try:
+        from test_latency_benchmark import run_full_benchmark
+        results = run_full_benchmark()
+        return jsonify({"ok": True, "benchmark": results})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 def wav_header(sample_rate, channels, sample_width):
     # Declares a very large data size so Sonos treats this as a long-
     # running live stream rather than a fixed-length file (same trick
@@ -1075,6 +1086,42 @@ def stream_wav(uid):
             broadcaster.unsubscribe(sid)
 
     return Response(generate(), mimetype="audio/wav")
+
+
+@app.route("/stream/<uid>.l16")
+def stream_l16(uid):
+    def generate():
+        sid, q = broadcaster.subscribe(maxlen=200)
+        chunk_ms = CHUNK / config["sample_rate"] * 1000
+        max_backlog_chunks = max(1, int(200 / chunk_ms))
+        trim_to_chunks = max(1, int(50 / chunk_ms))
+        last_trim_log = 0.0
+        try:
+            while True:
+                chunk = q.get()
+                backlog = q.qsize()
+                if backlog > max_backlog_chunks:
+                    dropped = 0
+                    for _ in range(backlog - trim_to_chunks):
+                        try:
+                            chunk = q.get_nowait()
+                            dropped += 1
+                        except queue.Empty:
+                            break
+                    now = time.monotonic()
+                    if dropped and now - last_trim_log > 5:
+                        last_trim_log = now
+                        print(f"[stream l16] backlog hit {backlog} chunks "
+                              f"(~{backlog * chunk_ms:.0f}ms) for {uid}; "
+                              f"dropped {dropped} chunks (~{dropped * chunk_ms:.0f}ms)")
+                yield l16_chunk(chunk, config.get("sample_width", 2))
+        finally:
+            broadcaster.unsubscribe(sid)
+
+    rate = config.get("sample_rate", 44100)
+    channels = config.get("channels", 2)
+    mimetype = f"audio/l16; rate={rate}; channels={channels}"
+    return Response(generate(), mimetype=mimetype)
 
 
 def run_web(host="0.0.0.0", port=None):

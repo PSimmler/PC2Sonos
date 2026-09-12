@@ -27,9 +27,19 @@ import pyaudiowpatch as pyaudio
 
 from config import config
 
-CHUNK = 1024  # frames per buffer
+CHUNK = 512  # frames per buffer (~11.6ms per chunk at 44.1kHz)
 
 _pa = pyaudio.PyAudio()
+
+
+def l16_chunk(pcm_bytes, sample_width=2):
+    """Converts Little-Endian 16-bit PCM audio (Windows default) to Big-Endian PCM
+    required by RFC 3551 / UPnP audio/l16 live stream protocol."""
+    if sample_width == 2 and pcm_bytes:
+        arr = np.frombuffer(pcm_bytes, dtype=np.int16)
+        return arr.byteswap().tobytes()
+    return pcm_bytes
+
 
 
 class Broadcaster:
