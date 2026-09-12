@@ -724,6 +724,10 @@ def render_loop(stop_event):
     self-healing pattern used elsewhere in the app (Sonos discovery, the
     stream watchdog)."""
     global current_render_device_name
+    if not config.get("enable_local_render", False):
+        current_render_device_name = "disabled"
+        print("[audio] local PC speaker rendering is disabled; skipping local playback")
+        return
     attempt = 0
     while not stop_event.is_set():
         try:

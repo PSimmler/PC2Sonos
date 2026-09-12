@@ -128,6 +128,7 @@ print("  OK")
 print("[test] capture_loop/render_loop run without crashing (short burst)...")
 stop_event = threading.Event()
 audio_engine.config["local_delay_ms"] = 50
+audio_engine.config["enable_local_render"] = True
 t1 = threading.Thread(target=audio_engine.capture_loop, args=(stop_event,), daemon=True)
 t2 = threading.Thread(target=audio_engine.render_loop, args=(stop_event,), daemon=True)
 t1.start()

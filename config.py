@@ -88,6 +88,9 @@ DEFAULT_CONFIG = {
     "capture_device_substr": "CABLE Output",
     # Blank = auto-pick the first real (non-virtual) WASAPI output device.
     "render_device_substr": "",
+    # False (default): disable local PC speaker playback to prevent local audio
+    # feedback loops when microphones or line-in input devices are active.
+    "enable_local_render": False,
     # "system" (default): capture whatever's playing through the virtual
     # cable, i.e. everything. "apps": capture and mix together only the
     # apps named in capture_target_names (see per_app_audio.py), by exe
