@@ -160,6 +160,10 @@ DEFAULT_CONFIG = {
     # Track native Windows volume slider adjustments and keyboard volume/mute keys
     # to control streaming audio output volume and mute state in real time.
     "win_volume_sync": True,
+    # Boost factor for audio stream sent to Sonos (2.5 = 250% / +8dB boost with soft-limiting).
+    # Keeps volume clear and loud on Sonos at normal speaker volume (e.g. 20%) even when
+    # Windows source app (e.g. Spotify) is set low.
+    "sonos_stream_gain": 2.5,
     # Flipped to true after the app's first successful launch. While
     # false, the dashboard opens in the browser automatically; after
     # that, use the tray icon (a startup toast still says it's running).

@@ -50,11 +50,18 @@ def _apply_win_volume(chunk):
         vol, muted = get_win_volume()
         if muted:
             return b"\x00" * len(chunk)
-        if vol != 1.0 and chunk:
+        if vol != 1.0 and chunk and len(chunk) % 2 == 0:
             arr = np.frombuffer(chunk, dtype=np.int16).astype(np.float32) * float(vol)
             return np.clip(arr, -32768, 32767).astype(np.int16).tobytes()
     except Exception:
         pass
+    return chunk
+
+
+def _apply_stream_gain(chunk):
+    gain = float(config.get("sonos_stream_gain", 2.5))
+    if gain != 1.0 and chunk and len(chunk) % 2 == 0:
+        return _apply_local_gain(chunk, gain)
     return chunk
 
 
@@ -81,6 +88,7 @@ class Broadcaster:
 
     def publish(self, chunk):
         chunk = _apply_win_volume(chunk)
+        chunk = _apply_stream_gain(chunk)
         with self._lock:
             subs = list(self._subs.items())
         for sid, q in subs:

@@ -48,7 +48,9 @@ def run_e2e_win_volume_test():
     # Save initial state
     orig_vol, orig_mute = win_volume.get_win_volume()
     orig_sync = config.get("win_volume_sync", True)
+    orig_stream_gain = config.get("sonos_stream_gain", 2.5)
     config["win_volume_sync"] = True
+    config["sonos_stream_gain"] = 1.0
 
     sub_id, q = audio_engine.broadcaster.subscribe(maxlen=10)
 
@@ -116,6 +118,7 @@ def run_e2e_win_volume_test():
     finally:
         audio_engine.broadcaster.unsubscribe(sub_id)
         config["win_volume_sync"] = orig_sync
+        config["sonos_stream_gain"] = orig_stream_gain
         if orig_vol is not None:
             win_volume.set_win_volume_scalar(orig_vol, orig_mute)
         win_volume.stop_win_volume_listener()

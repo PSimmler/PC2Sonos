@@ -224,6 +224,14 @@ r = client.post("/api/win_volume_sync", json={"enabled": False})
 assert r.status_code == 200 and r.get_json()["enabled"] is False
 r = client.post("/api/win_volume_sync", json={"enabled": True})
 assert r.status_code == 200 and r.get_json()["enabled"] is True
+
+# test /api/stream_gain endpoint
+r = client.get("/api/stream_gain")
+assert r.status_code == 200 and r.get_json()["ok"] is True
+r = client.post("/api/stream_gain", json={"percent": 300})
+assert r.status_code == 200 and webapp.config["sonos_stream_gain"] == 3.0
+r = client.post("/api/stream_gain", json={"percent": 250})
+assert r.status_code == 200 and webapp.config["sonos_stream_gain"] == 2.5
 print("  OK")
 
 import numpy as _np  # noqa: E402

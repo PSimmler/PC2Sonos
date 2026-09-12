@@ -301,6 +301,19 @@ DASHBOARD_HTML = """
       </div>
     </div>
     <div style="margin-top:14px; padding-top:12px; border-top:1px solid #2a2a2a;">
+      <label>Sonos stream volume boost &mdash; amplifies quiet apps/podcasts sent to Sonos so speaker volume stays in a normal range (soft-limiting prevents distortion)</label>
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:6px;">
+        <input type="range" min="100" max="400" step="5" id="streamGain" value="{{stream_gain_percent}}"
+               oninput="syncStreamGain('slider')" style="flex:1; min-width:150px;">
+        <input type="number" min="100" max="400" step="5" id="streamGainNum" value="{{stream_gain_percent}}"
+               oninput="syncStreamGain('number')"
+               style="width:70px; padding:4px; background:#111; color:#eee; border:1px solid #333; border-radius:6px;">
+        <span>%</span>
+        <button onclick="setStreamGain()">Apply Boost</button>
+      </div>
+      <div id="streamGainResult" style="margin-top:6px; font-size:12px; color:#888;"></div>
+    </div>
+    <div style="margin-top:14px; padding-top:12px; border-top:1px solid #2a2a2a;">
       <div style="display:flex; align-items:center; justify-content:space-between;">
         <label style="margin-bottom:0;">Audio source &mdash; what PC2Sonos sends to Sonos</label>
         <button onclick="loadAudioSessions()" style="background:#333; color:#eee; font-weight:400; padding:4px 10px; font-size:12px;">Refresh</button>
@@ -483,6 +496,32 @@ function syncLocalGain(source){
 async function setLocalGain(){
   const v = document.getElementById('localGain').value;
   await fetch('/api/local_gain', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({percent: parseInt(v)})});
+}
+function syncStreamGain(source){
+  const slider = document.getElementById('streamGain');
+  const num = document.getElementById('streamGainNum');
+  if (source === 'slider') {
+    num.value = slider.value;
+  } else {
+    let v = parseInt(num.value);
+    if (isNaN(v)) return;
+    v = Math.max(100, Math.min(400, v));
+    slider.value = v;
+  }
+  paintRange(slider);
+}
+async function setStreamGain(){
+  const el = document.getElementById('streamGainResult');
+  const percent = parseInt(document.getElementById('streamGain').value);
+  el.textContent = 'Setting stream boost to ' + percent + '%...';
+  const res = await fetch('/api/stream_gain', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({percent})});
+  const data = await res.json();
+  if (data.ok) {
+    el.textContent = 'Boost updated (' + percent + '%).';
+  } else {
+    el.textContent = 'Failed to set boost.';
+  }
 }
 let eqDebounce = null;
 function setLocalEq(){
@@ -687,6 +726,7 @@ def dashboard():
     return render_template_string(
         DASHBOARD_HTML, delay=config["local_delay_ms"], donate_url=DONATE_URL,
         local_gain_percent=round(config.get("local_render_gain", 1.0) * 100),
+        stream_gain_percent=round(config.get("sonos_stream_gain", 2.5) * 100),
         eq_bass_db=round(config.get("local_eq_bass_db", 0.0)),
         eq_mid_db=round(config.get("local_eq_mid_db", 0.0)),
         eq_treble_db=round(config.get("local_eq_treble_db", 0.0)))
@@ -969,6 +1009,19 @@ def api_win_volume_sync():
         "win_volume": win_vol_percent,
         "is_muted": is_muted,
     })
+
+
+@app.route("/api/stream_gain", methods=["GET", "POST"])
+def api_stream_gain():
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        percent = int(data.get("percent", 250))
+        percent = max(100, min(400, percent))
+        config["sonos_stream_gain"] = percent / 100.0
+        save_config(config)
+        return jsonify({"ok": True, "sonos_stream_gain": config["sonos_stream_gain"], "percent": percent})
+    percent = round(config.get("sonos_stream_gain", 2.5) * 100)
+    return jsonify({"ok": True, "sonos_stream_gain": config.get("sonos_stream_gain", 2.5), "percent": percent})
 
 
 def wav_header(sample_rate, channels, sample_width):
