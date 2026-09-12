@@ -231,76 +231,12 @@ DASHBOARD_HTML = """
   </details>
 </div>
 
-<div class="card">
-  <label>PC speaker output device &mdash; this is the key setting for keeping your PC's own speakers in sync with Sonos: it's WHICH physical speaker/headphones PC2Sonos plays the delayed audio to. PC2Sonos auto-picks the first real output it finds, which is usually right -- but if your PC speakers don't seem to be playing the delayed feed at all, or you have more than one output connected (headphones + speakers, a monitor's speakers, etc.), check this first before touching anything else below. (Virtual/software outputs, including PC2Sonos's own VB-Cable, are left out of this list -- they're never a real speaker.)</label>
-  <select id="renderDevice" onchange="setDevice()" style="width:100%; padding:6px; background:#111; color:#eee; border:1px solid #333; border-radius:6px;"></select>
-</div>
-
-<div class="card">
-  <label>Local PC-speaker sync delay &mdash; raise until your PC speakers and Sonos play together, with no echo</label>
-  <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-    <input type="range" min="0" max="4000" step="1" id="delay" value="{{delay}}"
-           oninput="syncDelay('slider')" style="flex:1; min-width:150px;">
-    <input type="number" min="0" max="4000" step="1" id="delayNum" value="{{delay}}"
-           oninput="syncDelay('number')"
-           style="width:70px; padding:4px; background:#111; color:#eee; border:1px solid #333; border-radius:6px;">
-    <span>ms</span>
-    <button onclick="setDelay()">Apply</button>
-    <button onclick="autoCalibrate('silent')" style="background:#2b6cb0; color:#fff;">Auto</button>
-  </div>
-  <div id="calibResult" style="margin-top:8px; font-size:12px; color:#888;"></div>
-  <div style="margin-top:14px; padding-top:12px; border-top:1px solid #2a2a2a; font-size:12px;">
-    <div style="color:#ccc; font-weight:600; margin-bottom:6px;">Prefer a test tone + microphone instead?</div>
-    <div style="color:#aaa; line-height:1.5;">
-      Put the microphone (built-in laptop mic, or any USB/headset mic) somewhere it
-      can clearly hear <strong>both</strong> your PC speakers and the Sonos speaker(s)
-      you're syncing to at once &mdash; roughly the midpoint between them, not sitting
-      right next to either one. A headset mic worn while sitting at the PC usually
-      only hears the PC speakers well and will give a bad reading. Works best in a
-      quiet room.
-      <div style="margin-top:8px;">
-        <button onclick="autoCalibrate('acoustic')" style="background:#2b6cb0; color:#fff;">Calibrate with test tone</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <details class="card" style="padding:0;">
   <summary style="cursor:pointer; padding:16px 18px; font-size:13px; color:#ccc; font-weight:600;">
-    Advanced: EQ &amp; audio source
+    Advanced: Stream settings &amp; audio source
   </summary>
   <div style="padding:14px 18px 16px;">
-    <div style="margin-top:4px;">
-      <label>PC speaker EQ &mdash; bass/mid/treble for the local speaker path only (Sonos speakers keep their own EQ in the Sonos app)</label>
-      <div id="eqSliders" style="display:flex; gap:16px; flex-wrap:wrap; margin-top:6px;">
-        <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
-          <input type="range" class="eq-fader" min="-24" max="24" step="1" id="eqBass" value="{{eq_bass_db}}"
-                 oninput="setLocalEq()" orient="vertical"
-                 style="writing-mode: vertical-lr; direction: rtl; width:24px; height:100px;">
-          <span id="eqBassVal" style="font-size:11px; color:#aaa;">{{eq_bass_db}} dB</span>
-          <span style="font-size:11px; color:#777;">Bass</span>
-        </div>
-        <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
-          <input type="range" class="eq-fader" min="-24" max="24" step="1" id="eqMid" value="{{eq_mid_db}}"
-                 oninput="setLocalEq()" orient="vertical"
-                 style="writing-mode: vertical-lr; direction: rtl; width:24px; height:100px;">
-          <span id="eqMidVal" style="font-size:11px; color:#aaa;">{{eq_mid_db}} dB</span>
-          <span style="font-size:11px; color:#777;">Mid</span>
-        </div>
-        <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
-          <input type="range" class="eq-fader" min="-24" max="24" step="1" id="eqTreble" value="{{eq_treble_db}}"
-                 oninput="setLocalEq()" orient="vertical"
-                 style="writing-mode: vertical-lr; direction: rtl; width:24px; height:100px;">
-          <span id="eqTrebleVal" style="font-size:11px; color:#aaa;">{{eq_treble_db}} dB</span>
-          <span style="font-size:11px; color:#777;">Treble</span>
-        </div>
-        <button onclick="resetLocalEq()" style="background:#333; color:#eee; font-weight:400; align-self:flex-start; padding:4px 10px; font-size:12px;">Reset</button>
-      </div>
-      <div id="eqWarning" style="display:none; font-size:11px; color:#e0a030; margin-top:6px;">
-        &#9888; Past &plusmn;6dB starts sounding less like "more/less bass" and more like a different speaker -- large boosts can also introduce noise.
-      </div>
-    </div>
-    <div style="margin-top:14px; padding-top:12px; border-top:1px solid #2a2a2a;">
+    <div>
       <label>Sonos stream volume boost &mdash; amplifies quiet apps/podcasts sent to Sonos so speaker volume stays in a normal range (soft-limiting prevents distortion)</label>
       <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:6px;">
         <input type="range" min="100" max="400" step="5" id="streamGain" value="{{stream_gain_percent}}"
@@ -695,13 +631,11 @@ function downloadUpdate(){
   if (_updateDownloadUrl) window.open(_updateDownloadUrl, '_blank');
 }
 refresh();
-loadDevices();
 loadAudioSessions();
 loadSeedIps();
 checkDonatePrompt();
 checkUpdate();
-syncLocalGain('slider');  // shows the warning immediately if the saved value is already past 100%
-setLocalEq();  // shows the warning immediately if a saved EQ band is already past +/-6dB
+syncStreamGain('slider');
 _updatePoll = setInterval(checkUpdate, 3000);
 setInterval(refresh, 4000);
 </script>
@@ -724,12 +658,8 @@ def favicon():
 @app.route("/")
 def dashboard():
     return render_template_string(
-        DASHBOARD_HTML, delay=config["local_delay_ms"], donate_url=DONATE_URL,
-        local_gain_percent=round(config.get("local_render_gain", 1.0) * 100),
-        stream_gain_percent=round(config.get("sonos_stream_gain", 2.5) * 100),
-        eq_bass_db=round(config.get("local_eq_bass_db", 0.0)),
-        eq_mid_db=round(config.get("local_eq_mid_db", 0.0)),
-        eq_treble_db=round(config.get("local_eq_treble_db", 0.0)))
+        DASHBOARD_HTML, donate_url=DONATE_URL,
+        stream_gain_percent=round(config.get("sonos_stream_gain", 2.5) * 100))
 
 
 def _should_prompt_donation():
