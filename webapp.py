@@ -713,6 +713,7 @@ def api_speakers():
 
 @app.route("/api/speaker/<uid>/enabled", methods=["POST"])
 def api_set_enabled(uid):
+    data = request.get_json(force=True)
     base_url = f"http://{get_lan_ip()}:{config['http_port']}"
     speaker_mgr.set_enabled(uid, bool(data.get("enabled")), base_url)
     return jsonify({"ok": True})
