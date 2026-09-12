@@ -149,7 +149,9 @@ assert r.status_code == 200 and b"Sonos speakers" in r.data, "expected the full 
 print("  / OK")
 
 r = client.get("/api/speakers")
-assert r.status_code == 200 and r.get_json() == []
+body = r.get_json()
+speakers = body if isinstance(body, list) else body.get("speakers", [])
+assert r.status_code == 200 and speakers == []
 print("  /api/speakers OK (empty, no real Sonos on this machine)")
 
 r = client.post("/api/delay", json={"delay_ms": 900})
@@ -214,6 +216,14 @@ finally:
     del webapp.speaker_mgr.speakers["MV_OFF"]
     webapp.config["speakers"] = _mv_saved_speakers_cfg
     webapp.config["local_render_gain"] = 1.0
+
+# test /api/win_volume_sync endpoint
+r = client.get("/api/win_volume_sync")
+assert r.status_code == 200 and r.get_json()["ok"] is True
+r = client.post("/api/win_volume_sync", json={"enabled": False})
+assert r.status_code == 200 and r.get_json()["enabled"] is False
+r = client.post("/api/win_volume_sync", json={"enabled": True})
+assert r.status_code == 200 and r.get_json()["enabled"] is True
 print("  OK")
 
 import numpy as _np  # noqa: E402

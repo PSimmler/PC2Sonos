@@ -42,6 +42,22 @@ def l16_chunk(pcm_bytes, sample_width=2):
 
 
 
+def _apply_win_volume(chunk):
+    if not config.get("win_volume_sync", True):
+        return chunk
+    try:
+        from win_volume import get_win_volume
+        vol, muted = get_win_volume()
+        if muted:
+            return b"\x00" * len(chunk)
+        if vol != 1.0 and chunk:
+            arr = np.frombuffer(chunk, dtype=np.int16).astype(np.float32) * float(vol)
+            return np.clip(arr, -32768, 32767).astype(np.int16).tobytes()
+    except Exception:
+        pass
+    return chunk
+
+
 class Broadcaster:
     """Fans out raw PCM chunks to any number of subscribers without
     letting a slow subscriber stall audio capture."""
@@ -64,6 +80,7 @@ class Broadcaster:
             self._subs.pop(sid, None)
 
     def publish(self, chunk):
+        chunk = _apply_win_volume(chunk)
         with self._lock:
             subs = list(self._subs.items())
         for sid, q in subs:
@@ -827,6 +844,12 @@ _capture_lock = threading.Lock()
 
 def start_audio_engine(stop_event):
     global _render_stop_event, _render_thread, _capture_stop_event, _capture_thread
+    try:
+        from win_volume import start_win_volume_listener
+        start_win_volume_listener()
+    except Exception as e:
+        print(f"[audio] failed to start win_volume listener: {e}")
+
     with _capture_lock:
         _capture_stop_event = threading.Event()
         _capture_thread = threading.Thread(target=capture_loop, args=(_capture_stop_event,), daemon=True)

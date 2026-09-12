@@ -203,26 +203,12 @@ DASHBOARD_HTML = """
 
 <div class="card">
   <div style="display:flex; align-items:center; justify-content:space-between;">
-    <label style="margin-bottom:0;">Sonos speakers</label>
+    <label style="margin-bottom:0;">Sonos speakers <span id="winMuteBadge" style="display:none; color:#ff4d4d; font-weight:700; margin-left:6px;">[MUTED]</span></label>
     <button onclick="rescan()" style="background:#333; color:#eee; font-weight:400; padding:4px 10px; font-size:12px;">Rescan</button>
   </div>
   <div style="font-size:11px; color:#777; margin:2px 0 8px;">
     &#9733; = default speaker: streamed to the instant PC2Sonos starts, before
     a network scan finishes. Click a star to set it.
-  </div>
-  <div style="padding:10px 0 12px; border-bottom:1px solid #232323; margin-bottom:4px;">
-    <label style="margin-bottom:6px;">Turn everything down together &mdash; scales every enabled Sonos speaker and the PC boost from wherever they're each set right now (individual volumes below stay fully adjustable afterward)</label>
-    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-      <input type="range" min="0" max="100" step="1" id="masterVolume" value="100"
-             oninput="document.getElementById('masterVolumeNum').value = this.value; paintRange(this)"
-             style="flex:1; min-width:150px;">
-      <input type="number" min="0" max="100" step="1" id="masterVolumeNum" value="100"
-             oninput="const s=document.getElementById('masterVolume'); s.value=this.value; paintRange(s)"
-             style="width:60px; padding:4px; background:#111; color:#eee; border:1px solid #333; border-radius:8px;">
-      <span>%</span>
-      <button onclick="applyMasterVolume()">Apply</button>
-    </div>
-    <div id="masterVolumeResult" style="margin-top:6px; font-size:12px; color:#888;"></div>
   </div>
   <div id="speakers"></div>
   <div id="rescanResult" style="margin-top:6px; font-size:12px; color:#888;"></div>
@@ -281,35 +267,10 @@ DASHBOARD_HTML = """
 
 <details class="card" style="padding:0;">
   <summary style="cursor:pointer; padding:16px 18px; font-size:13px; color:#ccc; font-weight:600;">
-    Advanced: volume boost, EQ &amp; audio source
+    Advanced: EQ &amp; audio source
   </summary>
   <div style="padding:14px 18px 16px;">
-    <div style="font-size:11px; color:#999; line-height:1.5;">
-      The volume boost and EQ below can push your speakers harder than their
-      intended level, and pushing either far enough can stress or damage
-      underpowered speakers/amps over time. <strong>The defaults (100%
-      boost, 0dB EQ) are what we recommend</strong> -- adjusting past them
-      is at your own risk to your hardware, not just audio quality.
-    </div>
-    <div style="margin-top:14px; padding-top:12px; border-top:1px solid #2a2a2a;">
-      <label>PC speaker volume boost &mdash; Windows' own volume only controls what PC2Sonos captures, not what this device plays back; use this if an aux/line-out speaker is too quiet even at 100% Windows volume</label>
-      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-        <input type="range" min="0" max="500" step="1" id="localGain" value="{{local_gain_percent}}"
-               oninput="syncLocalGain('slider')" style="flex:1; min-width:150px;">
-        <input type="number" min="0" max="500" step="1" id="localGainNum" value="{{local_gain_percent}}"
-               oninput="syncLocalGain('number')"
-               style="width:70px; padding:4px; background:#111; color:#eee; border:1px solid #333; border-radius:6px;">
-        <span>%</span>
-        <button onclick="setLocalGain()">Apply</button>
-      </div>
-      <div style="font-size:11px; color:#777; margin-top:6px;">
-        100% = unchanged passthrough (the original behavior). Above 100% amplifies the signal with a soft limiter -- loud peaks compress gradually instead of clipping, so it stays clean well past 100%.
-      </div>
-      <div id="localGainWarning" style="display:none; font-size:11px; color:#e0a030; margin-top:4px;">
-        &#9888; Above 100% is past the source's natural level -- the higher you go, the more the limiter has to compress to stay clean.
-      </div>
-    </div>
-    <div style="margin-top:14px; padding-top:12px; border-top:1px solid #2a2a2a;">
+    <div style="margin-top:4px;">
       <label>PC speaker EQ &mdash; bass/mid/treble for the local speaker path only (Sonos speakers keep their own EQ in the Sonos app)</label>
       <div id="eqSliders" style="display:flex; gap:16px; flex-wrap:wrap; margin-top:6px;">
         <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
@@ -410,14 +371,21 @@ function paintAllRanges(){
 }
 async function refresh(){
   const res = await fetch('/api/speakers');
-  const data = await res.json();
+  const rawData = await res.json();
+  const speakers = Array.isArray(rawData) ? rawData : (rawData.speakers || []);
+
+  const muteBadge = document.getElementById('winMuteBadge');
+  if (muteBadge) {
+    muteBadge.style.display = rawData.win_muted ? 'inline' : 'none';
+  }
+
   const el = document.getElementById('speakers');
   el.innerHTML = '';
-  if (data.length === 0) {
+  if (speakers.length === 0) {
     el.innerHTML = '<div style="color:#888; padding:10px 0;">Searching for Sonos speakers...</div>';
     return;
   }
-  data.forEach(s => {
+  speakers.forEach(s => {
     const div = document.createElement('div');
     div.className = 'speaker';
     const grouped = s.grouped_with && s.grouped_with.length;
@@ -430,11 +398,7 @@ async function refresh(){
         <input type="checkbox" ${s.enabled ? 'checked' : ''} onchange="toggle('${s.uid}', this.checked)">
         <span class="switch-track"></span>
       </label>
-      <span class="name">${s.name}${grouped ? ` <span style="font-weight:400; color:#888; font-size:12px;">(grouped with ${s.grouped_with.join(', ')} &mdash; this also controls them)</span>` : ''}</span>
-      <input type="range" min="0" max="100" value="${s.volume}"
-             oninput="paintRange(this); this.nextElementSibling.textContent = this.value + '%'"
-             onchange="setVol('${s.uid}', this.value)">
-      <span style="width:36px; display:inline-block;">${s.volume}%</span>
+      <span class="name" style="flex:1;">${s.name}${grouped ? ` <span style="font-weight:400; color:#888; font-size:12px;">(grouped with ${s.grouped_with.join(', ')} &mdash; this also controls them)</span>` : ''}</span>
       <span class="status ${s.streaming ? 'on' : 'off'}">${s.streaming ? 'streaming' : 'idle'}</span>
     `;
     el.appendChild(div);
@@ -484,31 +448,7 @@ async function toggle(uid, enabled){
   await fetch('/api/speaker/' + uid + '/enabled', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({enabled})});
   refresh();
 }
-async function setVol(uid, volume){
-  await fetch('/api/speaker/' + uid + '/volume', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({volume: parseInt(volume)})});
-}
-async function applyMasterVolume(){
-  const el = document.getElementById('masterVolumeResult');
-  const percent = parseInt(document.getElementById('masterVolume').value);
-  el.textContent = 'Scaling everything to ' + percent + '%...';
-  const res = await fetch('/api/master_volume', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({percent})});
-  const data = await res.json();
-  if (!data.ok) { el.textContent = 'Failed.'; return; }
-  // this is a one-shot action, not a persistent position -- reset to
-  // 100 so the next press always scales from the real current values,
-  // never compounds off wherever the slider was last left
-  const masterSlider = document.getElementById('masterVolume');
-  masterSlider.value = 100;
-  document.getElementById('masterVolumeNum').value = 100;
-  paintRange(masterSlider);
-  if (data.local_gain_percent !== undefined) {
-    document.getElementById('localGain').value = data.local_gain_percent;
-    syncLocalGain('slider');
-  }
-  el.textContent = 'Done -- individual volumes below are updated.';
-  refresh();
-}
+
 function syncDelay(source){
   const slider = document.getElementById('delay');
   const num = document.getElementById('delayNum');
@@ -783,19 +723,26 @@ def api_donate_dismiss():
 
 @app.route("/api/speakers")
 def api_speakers():
-    return jsonify(speaker_mgr.list())
+    speakers = speaker_mgr.list()
+    win_vol = 100
+    win_muted = False
+    try:
+        from win_volume import get_win_volume
+        v, m = get_win_volume()
+        win_vol = round(v * 100)
+        win_muted = m
+    except Exception:
+        pass
+    return jsonify({
+        "speakers": speakers,
+        "win_volume": win_vol,
+        "win_muted": win_muted,
+        "win_volume_sync": config.get("win_volume_sync", True),
+    })
 
 
 @app.route("/api/speaker/<uid>/enabled", methods=["POST"])
 def api_set_enabled(uid):
-    data = request.get_json(force=True)
-    # IMPORTANT: never use request.url_root here. The dashboard is often
-    # opened via http://127.0.0.1:<port>/ (or "localhost"), and that host
-    # is only meaningful on THIS PC -- a Sonos speaker is a separate
-    # physical device, and "127.0.0.1" on ITS end means itself, not us.
-    # Sonos would then try to fetch the stream from its own loopback and
-    # fail with "unable to connect". Always build the URL from this PC's
-    # real LAN IP instead, regardless of how the dashboard was reached.
     base_url = f"http://{get_lan_ip()}:{config['http_port']}"
     speaker_mgr.set_enabled(uid, bool(data.get("enabled")), base_url)
     return jsonify({"ok": True})
@@ -803,10 +750,6 @@ def api_set_enabled(uid):
 
 @app.route("/api/sonos_seed", methods=["GET", "POST"])
 def api_sonos_seed():
-    """Manual speaker IPs for when the speakers are on a subnet SSDP
-    multicast can't cross (e.g. an IoT VLAN). Saving triggers an
-    immediate rediscover so the user sees the result without waiting for
-    the 15s loop."""
     if request.method == "GET":
         return jsonify({"seed_ips": config.get("sonos_seed_ips", [])})
     data = request.get_json(force=True)
@@ -815,26 +758,18 @@ def api_sonos_seed():
         return jsonify({"ok": False, "error": "seed_ips must be a list"}), 400
     config["sonos_seed_ips"] = [str(ip).strip() for ip in ips if str(ip).strip()]
     save_config(config)
-    # rediscover() swallows its own errors and reports success/failure via
-    # its return value -- pass that straight through rather than always
-    # claiming ok
     ok = speaker_mgr.rediscover()
     return jsonify({"ok": ok, "found": len(speaker_mgr.list())})
 
 
 @app.route("/api/rescan", methods=["POST"])
 def api_rescan():
-    """One immediate discovery pass. Useful in auto mode (skip the wait
-    for the next 15s tick) and required in on_demand mode (the background
-    loop is idle until asked)."""
     ok = speaker_mgr.request_rescan()
     return jsonify({"ok": ok, "found": len(speaker_mgr.list())})
 
 
 @app.route("/api/default_speaker", methods=["POST"])
 def api_default_speaker():
-    """Pin the speaker PC2Sonos streams to immediately at launch (by its
-    current IP), or clear it with {"uid": null}."""
     data = request.get_json(force=True)
     uid = data.get("uid")
     if speaker_mgr.set_default_speaker(uid):
@@ -851,17 +786,13 @@ def api_set_volume(uid):
 
 @app.route("/api/master_volume", methods=["POST"])
 def api_master_volume():
-    """Scale every enabled Sonos speaker's volume AND the PC speaker
-    boost down together in one action, from whatever they're each
-    currently set to -- not a live/continuous control, so there's no
-    "current master position" to drift out of sync: every press scales
-    from the real values at that moment and writes real new values via
-    the same per-speaker/local-gain paths the individual controls use.
-    Deliberately one-directional (0-100%, never boosts past what's
-    already configured) so this can never push the PC boost past a
-    level the user hasn't already explicitly approved."""
     data = request.get_json(force=True)
     percent = max(0, min(100, int(data.get("percent", 100))))
+    try:
+        from win_volume import set_win_volume_scalar
+        set_win_volume_scalar(percent / 100.0)
+    except Exception as e:
+        print(f"[web] error setting win_volume: {e}")
     scale = percent / 100.0
     for s in speaker_mgr.list():
         if s["enabled"]:
@@ -869,7 +800,7 @@ def api_master_volume():
     new_gain_percent = round(config.get("local_render_gain", 1.0) * 100 * scale)
     config["local_render_gain"] = new_gain_percent / 100.0
     save_config(config)
-    return jsonify({"ok": True, "local_gain_percent": new_gain_percent})
+    return jsonify({"ok": True, "percent": percent, "local_gain_percent": new_gain_percent})
 
 
 @app.route("/api/delay", methods=["POST"])
@@ -1015,6 +946,29 @@ def api_benchmark():
         return jsonify({"ok": True, "benchmark": results})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/win_volume_sync", methods=["GET", "POST"])
+def api_win_volume_sync():
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        config["win_volume_sync"] = bool(data.get("enabled", True))
+        save_config(config)
+    win_vol_percent = 100
+    is_muted = False
+    try:
+        from win_volume import get_win_volume
+        v, m = get_win_volume()
+        win_vol_percent = round(v * 100)
+        is_muted = m
+    except Exception:
+        pass
+    return jsonify({
+        "ok": True,
+        "enabled": config.get("win_volume_sync", True),
+        "win_volume": win_vol_percent,
+        "is_muted": is_muted,
+    })
 
 
 def wav_header(sample_rate, channels, sample_width):

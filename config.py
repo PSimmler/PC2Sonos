@@ -157,6 +157,9 @@ DEFAULT_CONFIG = {
     # enable it in the dashboard (false). The default speaker is always
     # enabled regardless.
     "new_speakers_default_enabled": True,
+    # Track native Windows volume slider adjustments and keyboard volume/mute keys
+    # to control streaming audio output volume and mute state in real time.
+    "win_volume_sync": True,
     # Flipped to true after the app's first successful launch. While
     # false, the dashboard opens in the browser automatically; after
     # that, use the tray icon (a startup toast still says it's running).
