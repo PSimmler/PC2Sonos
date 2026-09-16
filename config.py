@@ -159,7 +159,7 @@ DEFAULT_CONFIG = {
     # and you turn off the ones you don't want) or leave it off until you
     # enable it in the dashboard (false). The default speaker is always
     # enabled regardless.
-    "new_speakers_default_enabled": True,
+    "new_speakers_default_enabled": False,
     # Track native Windows volume slider adjustments and keyboard volume/mute keys
     # to control streaming audio output volume and mute state in real time.
     "win_volume_sync": True,

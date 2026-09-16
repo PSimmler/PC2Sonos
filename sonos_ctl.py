@@ -609,13 +609,18 @@ class SpeakerManager:
             if uid not in self._boot_started:
                 # first time we've seen this speaker since the app
                 # launched (covers Windows startup): claim it for PC
-                # audio -- unless it's actively PLAYING something the
-                # user chose, in which case leave that alone
+                # audio ONLY if it is the designated default speaker or
+                # already streaming our audio. Other speakers stay untouched
+                # so their previous source/queue is preserved.
                 self._boot_started.add(uid)
-                if ours or state != "PLAYING":
+                default_uid = config.get("default_speaker_uid")
+                is_default = (uid == default_uid) or (not default_uid and len(self.speakers) == 1)
+                if (is_default or ours) and (ours or state != "PLAYING"):
                     print(f"[sonos] boot-start: sending stream to {zone.player_name}")
                     self.start_stream(uid, zone, base_url)
-                    continue
+                else:
+                    self.streams[uid] = False
+                continue
 
             if ours and state == "PLAYING":
                 self.streams[uid] = True

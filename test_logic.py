@@ -503,17 +503,25 @@ mgr._last_auto_restart[uid_a] = 0
 mgr.watchdog_tick(base)
 assert za.play_count == 2, "disabled speakers must never be auto-restarted"
 
-# boot-claim: a newly-seen speaker sitting idle on some OLD source gets
-# claimed for PC audio (this is the Windows-startup case), while one
-# actively playing another source (zb, Spotify) stays untouched
+# boot-claim: a newly-seen speaker sitting idle on some OLD source stays
+# untouched at boot unless it is the designated default speaker,
+# preserving its previous queue/source across PC startup.
 uid_c = "RINCON_CCCC0003"
 zc = FakeZone(uid_c, "x-sonos-spotify:stale_from_yesterday", "STOPPED")
 mgr.speakers[uid_c] = zc
 webapp.config["speakers"][uid_c] = {"enabled": True, "volume": 50}
 mgr.watchdog_tick(base)
-assert zc.play_count == 1, "idle speaker should be claimed at boot"
+assert zc.play_count == 0, "non-default idle speaker must stay untouched at boot"
 assert zb.play_count == 0, "actively-playing other source must stay untouched"
+
+# Active default speaker IS claimed at boot:
+webapp.config["default_speaker_uid"] = uid_c
+mgr._boot_started.remove(uid_c)
+mgr.watchdog_tick(base)
+assert zc.play_count == 1, "active default speaker should be claimed at boot"
+
 webapp.config["speakers"] = _wd_saved_speakers  # don't leak fake speakers to config.json
+webapp.config["default_speaker_uid"] = ""
 print("  OK")
 
 print("[test] watchdog periodic resync: reconnects a long-running stream to reset drift...")
